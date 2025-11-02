@@ -5,7 +5,7 @@ from lerobot.cameras.opencv import OpenCVCameraConfig
 from lerobot.robots import RobotConfig
 
 
-@RobotConfig.register_subclass("rosmaster")
+@RobotConfig.register_subclass("rosmaster_follower")
 @dataclass
 class RosmasterRobotConfig(RobotConfig):
     port: str

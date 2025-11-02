@@ -8,7 +8,7 @@ from .config_rosmaster_follower import RosmasterRobotConfig
 
 class RosmasterRobot(Robot):
     config_class = RosmasterRobotConfig
-    name = "my_cool_robot"
+    name = "rosmaster_follower"
 
     def __init__(self, config: RosmasterRobotConfig):
         super().__init__(config)
