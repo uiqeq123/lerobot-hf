@@ -342,3 +342,145 @@ If you want, you can cite this work with:
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=huggingface/lerobot&type=Timeline)](https://star-history.com/#huggingface/lerobot&Timeline)
+
+# LeRobot ROSmaster 数据收集工具
+
+本项目提供了用于ROSmaster机器人数据收集和操作的一套工具，可用于记录机器人操作数据、执行动作回放以及查看数据集信息。
+
+## 工具列表
+
+### 1. lerobot_rosmaster_data_collection.py
+
+符合LeRobot标准数据格式的ROSmaster数据收集脚本。
+
+#### 功能
+- 记录leader机械臂的手动操作数据并保存为LeRobot标准数据集格式
+- 执行follower机械臂的动作回放
+- 查看已记录的数据文件内容
+
+#### 使用方法
+```bash
+# 记录leader数据
+python lerobot_rosmaster_data_collection.py record --episode-count 1 --episode-length 300
+
+# 执行follower动作
+python lerobot_rosmaster_data_collection.py execute <数据目录>
+
+# 查看数据集信息
+python lerobot_rosmaster_data_collection.py info <数据目录>
+```
+
+#### 特点
+- 生成符合LeRobot标准的数据集格式
+- 自动处理无效角度数据
+- 确保关节角度在安全范围内
+- 执行前进行功能测试和用户确认
+- 同步采集摄像头图像数据
+
+---
+
+### 2. simple_rosmaster_data_collection.py
+
+简化版ROSmaster数据收集脚本。
+
+#### 功能
+- 记录leader机械臂的手动操作数据
+- 执行follower机械臂的动作回放
+- 查看已记录的数据文件内容
+
+#### 使用方法
+```bash
+# 记录leader数据 (默认30秒)
+python simple_rosmaster_data_collection.py record
+
+# 记录指定时长的leader数据
+python simple_rosmaster_data_collection.py record 60
+
+# 执行follower动作
+python simple_rosmaster_data_collection.py execute <数据文件>
+
+# 执行并记录follower动作
+python simple_rosmaster_data_collection.py execute_and_record <数据文件>
+
+# 查看数据文件
+python simple_rosmaster_data_collection.py view <数据文件>
+```
+
+#### 特点
+- 自动处理无效角度数据
+- 确保关节角度在安全范围内
+- 执行前进行功能测试和用户确认
+- 同步采集摄像头图像数据
+
+---
+
+### 3. realtime_data_recorder.py
+
+实时数据记录器，记录ROSmaster机器人的机械臂、小车和摄像头数据。
+
+#### 功能
+- 实时记录每一帧的机械臂角度数据
+- 实时记录小车运动状态数据
+- 定期获取并保存摄像头图像数据
+
+#### 使用方法
+```bash
+# 开始实时记录数据 (按Ctrl+C停止)
+python realtime_data_recorder.py record
+
+# 指定时长记录数据
+python realtime_data_recorder.py record --duration 60
+
+# 查看已记录的数据
+python realtime_data_recorder.py view --data-dir <数据目录路径>
+```
+
+#### 输出数据结构
+```
+realtime_recordings/
+└── record_YYYYMMDD_HHMMSS/
+    ├── recording_data.json     # 包含所有非图像数据的JSON文件
+    └── images/
+        ├── usb/               # USB摄像头图像
+        │   ├── usb_frame_000000.jpg
+        │   ├── usb_frame_000001.jpg
+        │   └── ...
+        └── depth/             # 深度摄像头图像
+            ├── depth_frame_000000.jpg
+            ├── depth_frame_000001.jpg
+            └── ...
+```
+
+---
+
+## 环境要求
+
+- Python 3.8+
+- 相关依赖包（参考requirements.txt）
+
+## 使用注意事项
+
+1. 确保机器人已开机并与电脑处于同一网络
+2. 默认机器人IP地址为192.168.1.11，如有不同请使用--host参数指定
+3. 确保有足够的磁盘空间存储图像数据
+4. 在执行follower动作前，建议先进行功能测试确保设备正常工作
+
+## 数据格式说明
+
+### LeRobot数据集格式
+
+LeRobot数据集遵循Hugging Face数据集格式，包含以下特征：
+- `observation.joints`: 机械臂关节角度观测值
+- `observation.joints_vel`: 机械臂关节速度观测值
+- `observation.velocity`: 小车速度观测值[x_vel, y_vel, z_vel]
+- `observation.images.usb`: USB摄像头图像（可选）
+- `observation.images.depth`: 深度摄像头图像（可选）
+- `action`: 动作数据，即机械臂关节角度目标值
+
+### Simple数据格式
+
+Simple数据格式为JSON文件，包含时间戳、机械臂角度和小车运动数据。
+
+### Realtime数据格式
+
+Realtime数据格式包含JSON元数据文件和图像文件，JSON文件记录每帧的时间戳、机械臂角度和小车运动数据，图像文件单独存储在目录中。
