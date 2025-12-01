@@ -136,7 +136,7 @@ class RealtimeDataRecorder:
         frame_count = 0
         start_time = time.time()
         last_camera_time = 0
-        camera_interval = 0.01  # 每0.1秒获取一次摄像头数据
+        camera_interval = 0.5  # 每0.1秒获取一次摄像头数据
         
         try:
             while self.is_recording:
@@ -144,17 +144,17 @@ class RealtimeDataRecorder:
                 if duration and (time.time() - start_time) >= duration:
                     break
                 
-                # 请求数据
-                self.client.get_arm_angles()
-                self.client.get_motion_data()
+
                 
                 # 控制摄像头数据获取频率
                 current_time = time.time()
                 if current_time - last_camera_time >= camera_interval:
+                    self.client.get_arm_angles()
+                    self.client.get_motion_data()
                     self.client.get_camera_frames()
                     last_camera_time = current_time
                 
-                time.sleep(0.01)  # 等待数据返回
+                time.sleep(0.5)  # 等待数据返回
                 
                 # 构造帧数据
                 frame_data = {
@@ -208,7 +208,7 @@ class RealtimeDataRecorder:
                     logger.info(f"当前记录帧数: {frame_count + 1}")
                 
                 frame_count += 1
-                time.sleep(0.01)  # 100Hz记录频率
+                # time.sleep(0.5)  # 2Hz记录频率
                 
         except KeyboardInterrupt:
             logger.info(f"用户停止记录，总共记录了 {frame_count} 帧数据")
@@ -260,7 +260,7 @@ class RealtimeDataRecorder:
         
         # 开启扭矩模式
         self.client.set_uart_servo_torque(True)
-        time.sleep(0.1)
+        time.sleep(0.5)
         
         # 显示前5帧数据供用户确认
         print("\n前5帧数据预览:")
@@ -322,7 +322,7 @@ class RealtimeDataRecorder:
                 
                 # 执行机械臂动作
                 try:
-                    self.client.set_uart_servo_angle_array(arm_angles, run_time=200)
+                    self.client.set_uart_servo_angle_array(arm_angles, run_time=500)
                     logger.info(f"执行动作 {i+1}/{len(valid_recorded_data)}: 关节角度={arm_angles}")
                 except Exception as e:
                     logger.error(f"执行机械臂动作时发生错误: {e}")
