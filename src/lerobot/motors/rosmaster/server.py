@@ -763,21 +763,21 @@ class RosmasterServer:
             speed_y = data.get('speed_y', 0)
             speed_z = data.get('speed_z', 0)
             
-            # 如果有z轴旋转速度，将其转换为左右旋转指令
-            if abs(speed_z) > 0.01:  # 有显著的z轴旋转
-                # 根据z轴速度的正负决定旋转方向
-                # 正值表示逆时针旋转（左旋转），负值表示顺时针旋转（右旋转）
-                if speed_z > 0:
-                    direction = 5  # 左旋转
-                else:
-                    direction = 6  # 右旋转
+            # # 如果有z轴旋转速度，将其转换为左右旋转指令
+            # if abs(speed_z) > 0.05:  # 有显著的z轴旋转
+            #     # 根据z轴速度的正负决定旋转方向
+            #     # 正值表示逆时针旋转（左旋转），负值表示顺时针旋转（右旋转）
+            #     if speed_z > 0:
+            #         direction = 5  # 左旋转
+            #     else:
+            #         direction = 6  # 右旋转
                 
-                # 将速度转换为0-100范围内的值
-                speed = int(abs(speed_z) * 100)
-                self.bot.set_car_run(direction, speed, self.stabilize_state)
-            else:
-                # 没有z轴旋转，使用常规的运动控制
-                self.bot.set_car_motion(speed_x, speed_y, 0)
+            #     # 将速度转换为0-100范围内的值
+            #     speed = int(abs(speed_z) * 20)
+            #     self.bot.set_car_run(direction, speed, self.stabilize_state)
+            # else:
+            #     # 没有z轴旋转，使用常规的运动控制
+            self.bot.set_car_motion(speed_x , speed_y  , speed_z )
             
             # 重置错误计数
             self.serial_error_count = 0
