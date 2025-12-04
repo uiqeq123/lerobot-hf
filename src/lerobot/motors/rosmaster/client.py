@@ -24,6 +24,7 @@ class RosmasterClient:
         self.socket = None
         self.connected = False
         self.callbacks = {}
+        self.current_speed = {'speed_x': 0.0, 'speed_y': 0.0, 'speed_z': 0.0}  # 添加速度追踪
 
         # 设置日志
         self._setup_logging(log_file)
@@ -125,6 +126,12 @@ class RosmasterClient:
             # 记录到日志文件
             self._log_message(msg_type, data, timestamp)
 
+            # 更新速度信息（如果提供了运动数据）
+            if msg_type in ['motion_status', 'motion_data']:
+                self.current_speed['speed_x'] = data.get('speed_x', self.current_speed['speed_x'])
+                self.current_speed['speed_y'] = data.get('speed_y', self.current_speed['speed_y'])
+                self.current_speed['speed_z'] = data.get('speed_z', self.current_speed['speed_z'])
+
             # 调用对应的回调函数
             if msg_type in self.callbacks:
                 self.callbacks[msg_type](data)
@@ -150,7 +157,7 @@ class RosmasterClient:
             speed_x = data.get('speed_x', 0)
             speed_y = data.get('speed_y', 0)
             speed_z = data.get('speed_z', 0)
-            self.logger.info(f"[运动状态] 时间: {timestamp_str}, X: {speed_x:.2f}, Y: {speed_y:.2f}, Z: {speed_z:.2f}")
+            self.logger.info(f"[运动状态] 时间: {timestamp_str}, 速度: X={speed_x:.2f}, Y={speed_y:.2f}, Z={speed_z:.2f}")
 
         elif msg_type == 'arm_angles':
             angles = data.get('angles', [])
@@ -262,6 +269,10 @@ class RosmasterClient:
     def control_car(self, speed_x, speed_y, speed_z=0):
         """控制小车移动"""
         print(f"🎮 控制小车移动: X={speed_x}, Y={speed_y}, Z={speed_z}")
+        # 更新当前速度
+        self.current_speed['speed_x'] = speed_x
+        self.current_speed['speed_y'] = speed_y
+        self.current_speed['speed_z'] = speed_z
         return self._send_command('control_car', {
             'speed_x': speed_x,
             'speed_y': speed_y,

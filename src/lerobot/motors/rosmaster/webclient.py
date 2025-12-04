@@ -22,6 +22,8 @@ class WebSocketHandler:
         self.client = client
         self.connections = set()
         self.loop = None
+        # 添加运动日志文件
+        self.motion_log_file = open("motion_log.txt", "w")
 
     def set_loop(self, loop):
         self.loop = loop
@@ -79,11 +81,25 @@ class WebSocketHandler:
             elif msg_type == 'get_camera_frames':
                 self.client.get_camera_frames()
             elif msg_type == 'control_car':
-                self.client.control_car(data.get('speed_x', 0), data.get('speed_y', 0), data.get('speed_z', 0))
+                speed_x = data.get('speed_x', 0)
+                speed_y = data.get('speed_y', 0)
+                speed_z = data.get('speed_z', 0)
+                # 记录发送的命令速度
+                self.log_motion_command("control_car_send", speed_x, speed_y, speed_z)
+                self.client.control_car(speed_x, speed_y, speed_z)
+                # 等待一小段时间以获取反馈
+                time.sleep(0.1)
+                # 记录反馈得到的实际速度
+                actual_speed_x = self.client.current_speed.get('speed_x', 0.0)
+                actual_speed_y = self.client.current_speed.get('speed_y', 0.0)
+                actual_speed_z = self.client.current_speed.get('speed_z', 0.0)
+                self.log_motion_command("control_car_feedback", actual_speed_x, actual_speed_y, actual_speed_z)
             elif msg_type == 'button_control':
-                self.client.button_control(data.get('direction', 0))
+                direction = data.get('direction', 0)
+                # 使用带速度记录的按钮控制方法
+                self.button_control_with_speed(direction)
                 # 添加自动停止机制：5秒后自动发送停止命令
-                if data.get('direction', 0) != 0:  # 如果不是停止命令
+                if direction != 0:  # 如果不是停止命令
                     async def auto_stop():
                         await asyncio.sleep(5)
                         await self.process_message(websocket, json.dumps({
@@ -91,6 +107,11 @@ class WebSocketHandler:
                             'data': {'direction': 0}
                         }))
                     asyncio.create_task(auto_stop())
+            elif msg_type == 'new_control':
+                # 新的控制方式，直接使用 control_car API
+                direction = data.get('direction', 0)
+                speed = data.get('speed', 0.16)
+                self.new_control_method(direction, speed)
             elif msg_type == 'set_speed':
                 self.client.set_speed(data.get('speed_xy', 15), data.get('speed_z', 15))
             elif msg_type == 'set_stabilize':
@@ -150,6 +171,144 @@ class WebSocketHandler:
                 'data': {'message': f'Processing error: {str(e)}'}
             }))
 
+    def new_control_method(self, direction, speed=0.1):
+        """新的控制方法，直接调用 control_car API"""
+        # 根据方向设置速度分量
+        speed_x = 0.0
+        speed_y = 0.0
+        speed_z = 0.0
+        
+        # 方向映射:
+        # 0: 停止
+        # 1: 前进
+        # 2: 后退
+        # 3: 左移
+        # 4: 右移
+        # 5: 左旋转
+        # 6: 右旋转
+        if direction == 0:  # 停止
+            speed_x = 0.0
+            speed_y = 0.0
+            speed_z = 0.0
+        elif direction == 1:  # 前进
+            speed_x = speed
+            speed_y = 0.0
+            speed_z = 0.0
+        elif direction == 2:  # 后退
+            speed_x = -speed
+            speed_y = 0.0
+            speed_z = 0.0
+        elif direction == 3:  # 左移
+            speed_x = 0.0
+            speed_y = speed
+            speed_z = 0.0
+        elif direction == 4:  # 右移
+            speed_x = 0.0
+            speed_y = -speed
+            speed_z = 0.0
+        elif direction == 5:  # 左旋转
+            speed_x = 0.0
+            speed_y = 0.0
+            speed_z = 0.5  # 固定旋转速度
+        elif direction == 6:  # 右旋转
+            speed_x = 0.0
+            speed_y = 0.0
+            speed_z = -0.5  # 固定旋转速度
+            
+        # 记录发送的命令速度
+        directions = {
+            0: "停止", 1: "前进", 2: "后退",
+            3: "左移", 4: "右移", 5: "左旋转", 6: "右旋转"
+        }
+        direction_name = directions.get(direction, "未知")
+        self.log_motion_command(f"new_control_{direction_name}_send", speed_x, speed_y, speed_z)
+        
+        # 调用 control_car API
+        self.client.control_car(speed_x, speed_y, speed_z)
+        
+        # 等待一小段时间以获取反馈
+        time.sleep(0.1)
+        
+        # 记录反馈得到的实际速度
+        actual_speed_x = self.client.current_speed.get('speed_x', 0.0)
+        actual_speed_y = self.client.current_speed.get('speed_y', 0.0)
+        actual_speed_z = self.client.current_speed.get('speed_z', 0.0)
+        self.log_motion_command(f"new_control_{direction_name}_feedback", actual_speed_x, actual_speed_y, actual_speed_z)
+        
+        # 添加自动停止机制：2秒后自动发送停止命令（除非是停止命令本身）
+        if direction != 0:
+            async def auto_stop():
+                await asyncio.sleep(2)
+                self.client.control_car(0, 0, 0)
+                self.log_motion_command("new_control_auto_stop", 0, 0, 0)
+                
+            asyncio.create_task(auto_stop())
+
+    def button_control_with_speed(self, direction):
+        """带速度记录的按钮控制方法"""
+        # 定义不同方向对应的速度值
+        speed_mapping = {
+            0: (0.0, 0.0, 0.0),    # 停止
+            1: (0.5, 0.0, 0.0),    # 前进
+            2: (-0.5, 0.0, 0.0),   # 后退
+            3: (0.0, 0.5, 0.0),    # 左移
+            4: (0.0, -0.5, 0.0),   # 右移
+            5: (0.0, 0.0, 0.5),    # 左旋转
+            6: (0.0, 0.0, -0.5)    # 右旋转
+        }
+        
+        # 获取对应方向的速度值
+        speed_x, speed_y, speed_z = speed_mapping.get(direction, (0.0, 0.0, 0.0))
+        
+        # 记录发送的命令速度
+        directions = {
+            0: "停止", 1: "前进", 2: "后退",
+            3: "左移", 4: "右移", 5: "左旋转", 6: "右旋转"
+        }
+        direction_name = directions.get(direction, "未知")
+        self.log_motion_command(f"button_control_{direction_name}_send", speed_x, speed_y, speed_z)
+        
+        # 执行按钮控制
+        self.client.button_control(direction)
+        
+        # 等待一小段时间以获取反馈
+        time.sleep(0.1)
+        
+        # 记录反馈得到的实际速度
+        actual_speed_x = self.client.current_speed.get('speed_x', 0.0)
+        actual_speed_y = self.client.current_speed.get('speed_y', 0.0)
+        actual_speed_z = self.client.current_speed.get('speed_z', 0.0)
+        self.log_motion_command(f"button_control_{direction_name}_feedback", actual_speed_x, actual_speed_y, actual_speed_z)
+
+    def log_button_command(self, direction):
+        """记录按钮控制命令和当前速度"""
+        directions = {
+            0: "停止",
+            1: "前进",
+            2: "后退",
+            3: "左转",
+            4: "右转",
+            5: "左旋转",
+            6: "右旋转"
+        }
+        
+        command = directions.get(direction, "未知")
+        # 获取当前速度
+        speed_x = self.client.current_speed.get('speed_x', 0.0)
+        speed_y = self.client.current_speed.get('speed_y', 0.0)
+        speed_z = self.client.current_speed.get('speed_z', 0.0)
+        log_entry = f"时间: {time.time()}, 命令: {command}({direction}), 速度: x={speed_x:.2f}, y={speed_y:.2f}, z={speed_z:.2f}\n"
+        self.motion_log_file.write(log_entry)
+        self.motion_log_file.flush()
+        print(f"📝 记录运动命令: {log_entry.strip()}")
+
+    def log_motion_command(self, command, speed_x, speed_y, speed_z):
+        """记录运动控制命令和速度"""
+        log_entry = f"时间: {time.time()}, 命令: {command}, 速度: x={speed_x:.2f}, y={speed_y:.2f}, z={speed_z:.2f}\n"
+        self.motion_log_file.write(log_entry)
+        self.motion_log_file.flush()
+        print(f"📝 记录运动命令: {log_entry.strip()}")
+
     def broadcast(self, msg_type, data):
         """广播消息到所有客户端"""
         if not self.loop:
@@ -179,6 +338,11 @@ class WebSocketHandler:
 
         for websocket in disconnected:
             self.connections.remove(websocket)
+
+    def __del__(self):
+        """析构函数，确保文件被关闭"""
+        if hasattr(self, 'motion_log_file') and not self.motion_log_file.closed:
+            self.motion_log_file.close()
 
 
 class HTTPHandler(SimpleHTTPRequestHandler):
@@ -492,6 +656,10 @@ def create_web_interface():
             grid-row: 3;
         }
         
+        .new-method {
+            background: #28a745;
+        }
+        
         @media (max-width: 768px) {
             .main-layout { 
                 flex-direction: column; 
@@ -638,6 +806,17 @@ def create_web_interface():
                         <button class="control-btn rotate-btn" onclick="sendCommand('button_control', {direction: 5})" ontouchstart="sendCommand('button_control', {direction: 5})" ontouchend="sendCommand('button_control', {direction: 0})">左旋转</button>
                         <button class="control-btn rotate-btn emergency" onclick="sendCommand('button_control', {direction: 0})" ontouchstart="sendCommand('button_control', {direction: 0})">停止</button>
                         <button class="control-btn rotate-btn" onclick="sendCommand('button_control', {direction: 6})" ontouchstart="sendCommand('button_control', {direction: 6})" ontouchend="sendCommand('button_control', {direction: 0})">右旋转</button>
+                    </div>
+                    
+                    <h4 style="margin-top: 20px;">新控制方法</h4>
+                    <div class="rotate-controls">
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 1, speed: 0.1})">新前进</button>
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 2, speed: 0.1})">新后退</button>
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 3, speed: 0.1})">新左移</button>
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 4, speed: 0.1})">新右移</button>
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 5})">新左旋</button>
+                        <button class="control-btn rotate-btn new-method" onclick="sendCommand('new_control', {direction: 6})">新右旋</button>
+                        <button class="control-btn rotate-btn emergency" onclick="sendCommand('new_control', {direction: 0})">新停止</button>
                     </div>
                     
                     <div class="button-grid">
